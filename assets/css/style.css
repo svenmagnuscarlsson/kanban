@@ -256,7 +256,7 @@ body {
 }
 
 .delete-btn {
-    opacity: 0;
+    opacity: 1; /* Alltid synlig för touch-skärmar */
     background: none;
     border: none;
     color: #9ca3af;
@@ -265,8 +265,14 @@ body {
     padding: 0.25rem;
 }
 
-.task-card:hover .delete-btn {
-    opacity: 1;
+@media (hover: hover) and (pointer: fine) {
+    .delete-btn {
+        opacity: 0;
+    }
+    
+    .task-card:hover .delete-btn {
+        opacity: 1;
+    }
 }
 
 .delete-btn:hover {
