@@ -119,6 +119,9 @@ let taskToDeleteId = null;
 
 // Render Board
 const renderBoard = async () => {
+    // Spara aktuell scroll-position (viktigt för mobil-vyn)
+    const currentScroll = boardEl.scrollLeft;
+    
     boardEl.innerHTML = '';
     const tasks = await getAllTasks();
     
@@ -208,6 +211,9 @@ const renderBoard = async () => {
         colEl.appendChild(listEl);
         boardEl.appendChild(colEl);
     });
+
+    // Återställ scroll-positionen omedelbart efter att DOM:en har ritats om
+    boardEl.scrollLeft = currentScroll;
 };
 
 // Drag and Drop Handlers
