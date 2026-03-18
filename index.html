@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MACA Kanban</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="assets/css/style.css">
+</head>
+<body>
+    <div class="app-container">
+        <header class="app-header">
+            <div class="header-titles">
+                <h1>MACA</h1>
+                <p>Kanban-tavla</p>
+            </div>
+            <button id="add-task-btn" class="btn-primary">
+                + Nytt kort
+            </button>
+        </header>
+
+        <div class="board" id="board">
+            <!-- Columns will be injected by JavaScript -->
+        </div>
+    </div>
+
+    <!-- Modal -->
+    <div id="modal-overlay" class="modal-overlay hidden">
+        <div class="modal">
+            <h2>Skapa nytt kort</h2>
+            <form id="new-task-form">
+                <div class="form-group">
+                    <label for="task-title">Titel</label>
+                    <input type="text" id="task-title" required placeholder="T.ex. Uppdatera logotypen" autocomplete="off">
+                </div>
+                
+                <div class="form-group">
+                    <label for="task-tag">Tagg</label>
+                    <input type="text" id="task-tag" list="existing-tags" placeholder="T.ex. Frontend, Bugg..." autocomplete="off">
+                    <datalist id="existing-tags">
+                        <!-- Populated by JS -->
+                    </datalist>
+                </div>
+
+                <div class="form-group">
+                    <label for="task-desc">Beskrivning</label>
+                    <textarea id="task-desc" rows="3" placeholder="Lägg till lite detaljer..."></textarea>
+                </div>
+
+                <div class="modal-actions">
+                    <button type="button" id="cancel-btn" class="btn-secondary">Avbryt</button>
+                    <button type="submit" class="btn-primary">Spara kort</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Bekräftelse-modal för borttagning -->
+    <div id="confirm-modal-overlay" class="modal-overlay hidden">
+        <div class="modal">
+            <h2>Ta bort kort</h2>
+            <p>Är du säker på att du vill ta bort detta kort? Åtgärden kan inte ångras.</p>
+            <div class="modal-actions" style="margin-top: 1.5rem;">
+                <button type="button" id="confirm-cancel-btn" class="btn-secondary">Avbryt</button>
+                <button type="button" id="confirm-delete-btn" class="btn-danger">Ta bort</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="assets/js/app.js"></script>
+</body>
+</html>
