@@ -1,12 +1,5 @@
 // Initial testdata
-const initialData = [
-  { id: '1', title: 'Sätt upp databasen', description: 'Konfigurera PostgreSQL och skapa grundläggande tabeller.', status: 'Att göra', tag: 'Backend', color: 'background-color: #dbeafe; color: #1e40af;' },
-  { id: '2', title: 'Designa landningssidan', description: 'Skapa wireframes för den nya kampanjen.', status: 'Att göra', tag: 'Design', color: 'background-color: #fce7f3; color: #9d174d;' },
-  { id: '3', title: 'Implementera inloggning', description: 'Integrera OAuth2 via Google och GitHub.', status: 'Pågående', tag: 'Frontend', color: 'background-color: #fef3c7; color: #92400e;' },
-  { id: '4', title: 'Skriv API-dokumentation', description: 'Uppdatera Swagger-dokumentationen för v2.0.', status: 'Granskning', tag: 'Dokumentation', color: 'background-color: #f3e8ff; color: #6b21a8;' },
-  { id: '5', title: 'Fixa navigationsbugg', description: 'Menyn kollapsar inte korrekt på mobila enheter.', status: 'Klart', tag: 'Bugg', color: 'background-color: #fee2e2; color: #b91c1c;' },
-  { id: '6', title: 'Optimera bilder', description: 'Konvertera alla banners till WebP-format.', status: 'Klart', tag: 'Prestanda', color: 'background-color: #dcfce7; color: #166534;' },
-];
+const initialData = [];
 
 const columnsConfigs = ['Att göra', 'Pågående', 'Granskning', 'Klart'];
 
