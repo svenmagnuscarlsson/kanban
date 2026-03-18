@@ -241,19 +241,23 @@ const handleDrop = async (e) => {
 
 // Touch Handlers for Mobile
 let touchClone = null;
+let draggedTaskOriginalStatus = null;
+let lastHoveredColumn = null;
 
 const handleTouchStart = (e) => {
     if (e.target.closest('.delete-btn')) return; // Ignore if clicking delete
     const taskEl = e.currentTarget;
     draggedTaskId = taskEl.dataset.id;
+    draggedTaskOriginalStatus = taskEl.closest('.column').dataset.status;
     const touch = e.touches[0];
     
     // Create clone
     touchClone = taskEl.cloneNode(true);
     touchClone.classList.add('task-clone');
     touchClone.style.width = `${taskEl.offsetWidth}px`;
-    touchClone.style.left = `${touch.clientX - taskEl.offsetWidth/2}px`;
-    touchClone.style.top = `${touch.clientY - taskEl.offsetHeight/2}px`;
+    touchClone.style.left = '0px';
+    touchClone.style.top = '0px';
+    touchClone.style.transform = `translate3d(${touch.clientX - taskEl.offsetWidth/2}px, ${touch.clientY - taskEl.offsetHeight/2}px, 0)`;
     document.body.appendChild(touchClone);
     
     setTimeout(() => {
@@ -267,27 +271,26 @@ const handleTouchMove = (e) => {
     e.preventDefault(); // Prevent native scroll
     const touch = e.touches[0];
     
-    touchClone.style.left = `${touch.clientX - touchClone.offsetWidth/2}px`;
-    touchClone.style.top = `${touch.clientY - touchClone.offsetHeight/2}px`;
+    // Använd hårdvaru-accelererad transform för 60fps
+    touchClone.style.transform = `translate3d(${touch.clientX - touchClone.offsetWidth/2}px, ${touch.clientY - touchClone.offsetHeight/2}px, 0)`;
     
-    // Hide to find element underneath
-    touchClone.style.display = 'none';
+    // touchClone har pointer-events: none i CSS, letar element bakom utan att toggla display (vilket är superlångsamt)
     const elemBelow = document.elementFromPoint(touch.clientX, touch.clientY);
-    touchClone.style.display = '';
-    
     const column = elemBelow ? elemBelow.closest('.column') : null;
     
-    document.querySelectorAll('.column').forEach(col => col.classList.remove('drag-over'));
-    if (column) {
-        column.classList.add('drag-over');
+    // Ändra klass bara om vi faktiskt byter kolumn, för att spara prestanda
+    if (column !== lastHoveredColumn) {
+        if (lastHoveredColumn) lastHoveredColumn.classList.remove('drag-over');
+        if (column) column.classList.add('drag-over');
+        lastHoveredColumn = column;
     }
     
     // Auto-scroll board horizontally if near edges
     const board = document.getElementById('board');
     if (touch.clientX < 40) {
-        board.scrollBy({ left: -15, behavior: 'auto' });
+        board.scrollBy({ left: -20, behavior: 'instant' });
     } else if (touch.clientX > window.innerWidth - 40) {
-        board.scrollBy({ left: 15, behavior: 'auto' });
+        board.scrollBy({ left: 20, behavior: 'instant' });
     }
 };
 
@@ -295,7 +298,6 @@ const handleTouchEnd = async (e) => {
     if (!touchClone) return;
     const touch = e.changedTouches[0];
     
-    touchClone.style.display = 'none';
     const elemBelow = document.elementFromPoint(touch.clientX, touch.clientY);
     const column = elemBelow ? elemBelow.closest('.column') : null;
     
@@ -303,16 +305,25 @@ const handleTouchEnd = async (e) => {
     touchClone.remove();
     touchClone = null;
     
-    document.querySelectorAll('.column').forEach(col => col.classList.remove('drag-over'));
+    if (lastHoveredColumn) lastHoveredColumn.classList.remove('drag-over');
+    lastHoveredColumn = null;
     
     if (column && draggedTaskId) {
         const targetStatus = column.dataset.status;
-        await updateTaskStatus(draggedTaskId, targetStatus);
-        renderBoard();
+        
+        // Undvik att uppdatera DB / rendera om ifall kortet inte ens bytte kolumn (fixar problem med att sidscrollen resettas vid enkelt "tryck" på kortet)
+        if (targetStatus !== draggedTaskOriginalStatus) {
+            await updateTaskStatus(draggedTaskId, targetStatus);
+            renderBoard();
+        } else {
+            // Vi är i samma kolumn. Ta bara bort drop-state.
+            document.querySelectorAll('.task-card').forEach(card => card.classList.remove('dragging'));
+        }
     } else {
         document.querySelectorAll('.task-card').forEach(card => card.classList.remove('dragging'));
     }
     draggedTaskId = null;
+    draggedTaskOriginalStatus = null;
 };
 
 // Modal functions
