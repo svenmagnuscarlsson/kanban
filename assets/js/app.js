@@ -108,7 +108,7 @@ const modalOverlay = document.getElementById('modal-overlay');
 const addTaskBtn = document.getElementById('add-task-btn');
 const cancelBtn = document.getElementById('cancel-btn');
 const newTaskForm = document.getElementById('new-task-form');
-const existingTagsDatalist = document.getElementById('existing-tags');
+const tagSuggestionsContainer = document.getElementById('tag-suggestions');
 
 const confirmModalOverlay = document.getElementById('confirm-modal-overlay');
 const confirmCancelBtn = document.getElementById('confirm-cancel-btn');
@@ -122,9 +122,20 @@ const renderBoard = async () => {
     boardEl.innerHTML = '';
     const tasks = await getAllTasks();
     
-    // Update datalist for tags
+    // Update tag suggestions with clickable badges
     const tags = [...new Set(tasks.map(t => t.tag).filter(Boolean))];
-    existingTagsDatalist.innerHTML = tags.map(tag => `<option value="${tag}">`).join('');
+    if (tagSuggestionsContainer) {
+        tagSuggestionsContainer.innerHTML = tags.map(tag => 
+            `<button type="button" class="tag-suggestion-badge">${tag}</button>`
+        ).join('');
+        
+        // Add click events to the badges
+        tagSuggestionsContainer.querySelectorAll('.tag-suggestion-badge').forEach(badge => {
+            badge.addEventListener('click', (e) => {
+                document.getElementById('task-tag').value = e.target.textContent;
+            });
+        });
+    }
 
     columnsConfigs.forEach(columnStatus => {
         const columnTasks = tasks.filter(t => t.status === columnStatus);

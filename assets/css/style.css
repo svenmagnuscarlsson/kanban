@@ -384,6 +384,30 @@ body {
     box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.2);
 }
 
+.tag-suggestions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-top: 0.5rem;
+}
+
+.tag-suggestion-badge {
+    font-size: 0.75rem;
+    font-weight: 500;
+    padding: 0.25rem 0.625rem;
+    border-radius: 9999px;
+    background-color: #f3f4f6;
+    color: #4b5563;
+    border: 1px solid #e5e7eb;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.tag-suggestion-badge:hover {
+    background-color: #e5e7eb;
+    color: #111827;
+}
+
 .modal-actions {
     display: flex;
     justify-content: flex-end;
