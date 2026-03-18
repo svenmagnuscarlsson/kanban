@@ -256,19 +256,43 @@ const handleDrop = async (e) => {
     }
 };
 
-// Touch Handlers for Mobile
+// ============================================================
+// TOUCH DRAG & DROP FÖR MOBIL
+// Hanterar hela flödet för att dra kort mellan kolumner på 
+// pekskärmar. Inkluderar mjuk auto-scroll via rAF-loop och 
+// tillfälligt avaktiverad scroll-snap under drag.
+// ============================================================
 let touchClone = null;
 let draggedTaskOriginalStatus = null;
 let lastHoveredColumn = null;
 
+// --- Mjuk auto-scroll-variabler ---
+// scrollSpeed styr hur snabbt tavlan auto-scrollar (px/frame).
+// Värdet sätts dynamiskt beroende på hur nära skärmkanten 
+// fingret befinner sig. Ju närmare kanten, desto snabbare.
+let scrollSpeed = 0;
+let scrollRAF = null;
+
+// --- rAF-loop för mjuk auto-scroll ---
+// Körs kontinuerligt under hela dragningen (ca 60ggr/sek).
+// Istället för ryckiga scrollBy-anrop vid varje touchmove
+// ger detta en mjuk, flytande övergång mellan kolumner.
+// Hastigheten (scrollSpeed) uppdateras i handleTouchMove.
+const smoothScrollLoop = () => {
+    if (scrollSpeed !== 0) {
+        boardEl.scrollLeft += scrollSpeed;
+    }
+    scrollRAF = requestAnimationFrame(smoothScrollLoop);
+};
+
 const handleTouchStart = (e) => {
-    if (e.target.closest('.delete-btn')) return; // Ignore if clicking delete
+    if (e.target.closest('.delete-btn')) return;
     const taskEl = e.currentTarget;
     draggedTaskId = taskEl.dataset.id;
     draggedTaskOriginalStatus = taskEl.closest('.column').dataset.status;
     const touch = e.touches[0];
     
-    // Create clone
+    // Skapa visuell klon som följer fingret
     touchClone = taskEl.cloneNode(true);
     touchClone.classList.add('task-clone');
     touchClone.style.width = `${taskEl.offsetWidth}px`;
@@ -280,34 +304,58 @@ const handleTouchStart = (e) => {
     setTimeout(() => {
         taskEl.classList.add('dragging');
     }, 0);
-    document.body.style.overflow = 'hidden'; // Prevent document scrolling
+
+    // --- Stäng av scroll-snap under drag ---
+    // scroll-snap-type: x mandatory slåss annars mot dragningen
+    // och skapar ett trögt, motigt beteende. Vi slår av det här
+    // och slår på det igen i handleTouchEnd.
+    boardEl.style.scrollSnapType = 'none';
+
+    document.body.style.overflow = 'hidden';
+
+    // Starta den mjuka scroll-loopen
+    scrollSpeed = 0;
+    scrollRAF = requestAnimationFrame(smoothScrollLoop);
 };
 
 const handleTouchMove = (e) => {
     if (!touchClone) return;
-    e.preventDefault(); // Prevent native scroll
+    e.preventDefault();
     const touch = e.touches[0];
     
-    // Använd hårdvaru-accelererad transform för 60fps
+    // Hårdvaru-accelererad transform (translate3d) för 60fps
     touchClone.style.transform = `translate3d(${touch.clientX - touchClone.offsetWidth/2}px, ${touch.clientY - touchClone.offsetHeight/2}px, 0)`;
     
-    // touchClone har pointer-events: none i CSS, letar element bakom utan att toggla display (vilket är superlångsamt)
+    // touchClone har pointer-events: none i CSS, så 
+    // elementFromPoint hittar elementet bakom klonen
     const elemBelow = document.elementFromPoint(touch.clientX, touch.clientY);
     const column = elemBelow ? elemBelow.closest('.column') : null;
     
-    // Ändra klass bara om vi faktiskt byter kolumn, för att spara prestanda
+    // Uppdatera drag-over-klass bara vid kolumnbyte (sparar prestanda)
     if (column !== lastHoveredColumn) {
         if (lastHoveredColumn) lastHoveredColumn.classList.remove('drag-over');
         if (column) column.classList.add('drag-over');
         lastHoveredColumn = column;
     }
     
-    // Auto-scroll board horizontally if near edges
-    const board = document.getElementById('board');
-    if (touch.clientX < 40) {
-        board.scrollBy({ left: -20, behavior: 'instant' });
-    } else if (touch.clientX > window.innerWidth - 40) {
-        board.scrollBy({ left: 20, behavior: 'instant' });
+    // --- Beräkna auto-scroll-hastighet ---
+    // Zon: 60px från varje skärmkant.
+    // Hastigheten ökar linjärt ju närmare kanten fingret är,
+    // vilket ger en naturlig känsla. Max ~5px/frame ≈ 300px/sek.
+    // Ändra EDGE_ZONE för bredare/smalare aktiveringszon.
+    // Ändra MAX_SPEED för snabbare/långsammare auto-scroll.
+    const EDGE_ZONE = 60;  // px från kanten (ändra för bredare zon)
+    const MAX_SPEED = 5;   // px per frame, max hastighet (ändra för snabbare/långsammare)
+    
+    if (touch.clientX < EDGE_ZONE) {
+        // Vänsterkant: negativ hastighet (scrolla åt vänster)
+        scrollSpeed = -MAX_SPEED * (1 - touch.clientX / EDGE_ZONE);
+    } else if (touch.clientX > window.innerWidth - EDGE_ZONE) {
+        // Högerkant: positiv hastighet (scrolla åt höger)
+        scrollSpeed = MAX_SPEED * (1 - (window.innerWidth - touch.clientX) / EDGE_ZONE);
+    } else {
+        // Mitt på skärmen: ingen auto-scroll
+        scrollSpeed = 0;
     }
 };
 
@@ -318,22 +366,33 @@ const handleTouchEnd = async (e) => {
     const elemBelow = document.elementFromPoint(touch.clientX, touch.clientY);
     const column = elemBelow ? elemBelow.closest('.column') : null;
     
+    // Stoppa auto-scroll-loopen
+    if (scrollRAF) {
+        cancelAnimationFrame(scrollRAF);
+        scrollRAF = null;
+    }
+    scrollSpeed = 0;
+
     document.body.style.overflow = '';
     touchClone.remove();
     touchClone = null;
     
+    // --- Återaktivera scroll-snap ---
+    // Sätter tillbaka scroll-snap så att kolumnerna snäpper
+    // till rätt position med en mjuk CSS-transition (scroll-behavior: smooth).
+    boardEl.style.scrollSnapType = 'x mandatory';
+
     if (lastHoveredColumn) lastHoveredColumn.classList.remove('drag-over');
     lastHoveredColumn = null;
     
     if (column && draggedTaskId) {
         const targetStatus = column.dataset.status;
         
-        // Undvik att uppdatera DB / rendera om ifall kortet inte ens bytte kolumn (fixar problem med att sidscrollen resettas vid enkelt "tryck" på kortet)
+        // Undvik omrendering om kortet inte bytte kolumn
         if (targetStatus !== draggedTaskOriginalStatus) {
             await updateTaskStatus(draggedTaskId, targetStatus);
             renderBoard();
         } else {
-            // Vi är i samma kolumn. Ta bara bort drop-state.
             document.querySelectorAll('.task-card').forEach(card => card.classList.remove('dragging'));
         }
     } else {
