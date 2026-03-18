@@ -258,147 +258,132 @@ const handleDrop = async (e) => {
 
 // ============================================================
 // TOUCH DRAG & DROP FÖR MOBIL
-// Hanterar hela flödet för att dra kort mellan kolumner på 
-// pekskärmar. Inkluderar mjuk auto-scroll via rAF-loop och 
-// tillfälligt avaktiverad scroll-snap under drag.
+//
+// Auto-scroll styrs av ett setInterval som startas i handleTouchStart
+// och stoppas i handleTouchEnd. Intervallet kollar varje 16ms (~60fps)
+// om fingret befinner sig nära kanten och scrollar i så fall boardEl.
+//
+// Kolumner är 85vw breda. För att nå nästa kolumn drar man kortet
+// mot skärmkanten – auto-scroll tar vid automatiskt.
+//
+// --- Justera scroll-känslan ---
+// EDGE_ZONE  (rad nedan): px-zon från kanten som aktiverar scroll.
+//            Öka för bredare aktiveringsyta.
+// BASE_SPEED (rad nedan): px per intervall. Öka för snabbare scroll.
 // ============================================================
-let touchClone = null;
+
+const EDGE_ZONE  = 80;   // px från skärmkant → aktiverar auto-scroll
+const BASE_SPEED = 8;    // px per tick (16ms) = ~500px/sek vid max
+
+let touchClone             = null;
 let draggedTaskOriginalStatus = null;
-let lastHoveredColumn = null;
+let lastHoveredColumn      = null;
+let autoScrollInterval     = null;  // setInterval-referens för auto-scroll
+let currentTouchX          = 0;     // senaste kända finger-X (uppdateras i move)
 
-// --- Mjuk auto-scroll-variabler ---
-// scrollSpeed styr hur snabbt tavlan auto-scrollar (px/frame).
-// Värdet sätts dynamiskt beroende på hur nära skärmkanten 
-// fingret befinner sig. Ju närmare kanten, desto snabbare.
-let scrollSpeed = 0;
-let scrollRAF = null;
+// Startar eller stoppar auto-scroll-intervallet
+const startAutoScroll = () => {
+    if (autoScrollInterval) return;
+    autoScrollInterval = setInterval(() => {
+        // Beräkna hastighet linjärt: 0 vid zonkanten → BASE_SPEED vid skärmkanten
+        if (currentTouchX < EDGE_ZONE) {
+            const ratio = 1 - currentTouchX / EDGE_ZONE;
+            boardEl.scrollLeft -= BASE_SPEED * ratio;
+        } else if (currentTouchX > window.innerWidth - EDGE_ZONE) {
+            const ratio = 1 - (window.innerWidth - currentTouchX) / EDGE_ZONE;
+            boardEl.scrollLeft += BASE_SPEED * ratio;
+        }
+    }, 16); // ~60fps
+};
 
-// --- rAF-loop för mjuk auto-scroll ---
-// Körs kontinuerligt under hela dragningen (ca 60ggr/sek).
-// Istället för ryckiga scrollBy-anrop vid varje touchmove
-// ger detta en mjuk, flytande övergång mellan kolumner.
-// Hastigheten (scrollSpeed) uppdateras i handleTouchMove.
-const smoothScrollLoop = () => {
-    if (scrollSpeed !== 0) {
-        boardEl.scrollLeft += scrollSpeed;
+const stopAutoScroll = () => {
+    if (autoScrollInterval) {
+        clearInterval(autoScrollInterval);
+        autoScrollInterval = null;
     }
-    scrollRAF = requestAnimationFrame(smoothScrollLoop);
 };
 
 const handleTouchStart = (e) => {
     if (e.target.closest('.delete-btn')) return;
     const taskEl = e.currentTarget;
-    draggedTaskId = taskEl.dataset.id;
+    draggedTaskId             = taskEl.dataset.id;
     draggedTaskOriginalStatus = taskEl.closest('.column').dataset.status;
-    const touch = e.touches[0];
-    
-    // Skapa visuell klon som följer fingret
+    const touch               = e.touches[0];
+    currentTouchX             = touch.clientX;
+
+    // Skapa visuell klon som följer fingret (translate3d = hårdvaruaccelererat)
     touchClone = taskEl.cloneNode(true);
     touchClone.classList.add('task-clone');
-    touchClone.style.width = `${taskEl.offsetWidth}px`;
-    touchClone.style.left = '0px';
-    touchClone.style.top = '0px';
-    touchClone.style.transform = `translate3d(${touch.clientX - taskEl.offsetWidth/2}px, ${touch.clientY - taskEl.offsetHeight/2}px, 0)`;
+    touchClone.style.width     = `${taskEl.offsetWidth}px`;
+    touchClone.style.left      = '0px';
+    touchClone.style.top       = '0px';
+    touchClone.style.transform = `translate3d(${touch.clientX - taskEl.offsetWidth / 2}px, ${touch.clientY - taskEl.offsetHeight / 2}px, 0)`;
     document.body.appendChild(touchClone);
-    
-    setTimeout(() => {
-        taskEl.classList.add('dragging');
-    }, 0);
 
-    // --- Stäng av scroll-snap under drag ---
-    // scroll-snap-type: x mandatory slåss annars mot dragningen
-    // och skapar ett trögt, motigt beteende. Vi slår av det här
-    // och slår på det igen i handleTouchEnd.
+    setTimeout(() => taskEl.classList.add('dragging'), 0);
+
+    // Stäng av scroll-snap under drag, återaktiveras i handleTouchEnd
     boardEl.style.scrollSnapType = 'none';
-
     document.body.style.overflow = 'hidden';
 
-    // Starta den mjuka scroll-loopen
-    scrollSpeed = 0;
-    scrollRAF = requestAnimationFrame(smoothScrollLoop);
+    startAutoScroll(); // Starta auto-scroll-loopen
 };
 
 const handleTouchMove = (e) => {
     if (!touchClone) return;
-    e.preventDefault();
-    const touch = e.touches[0];
-    
-    // Hårdvaru-accelererad transform (translate3d) för 60fps
-    touchClone.style.transform = `translate3d(${touch.clientX - touchClone.offsetWidth/2}px, ${touch.clientY - touchClone.offsetHeight/2}px, 0)`;
-    
-    // touchClone har pointer-events: none i CSS, så 
-    // elementFromPoint hittar elementet bakom klonen
+    e.preventDefault(); // Förhindrar native page-scroll under drag
+
+    const touch   = e.touches[0];
+    currentTouchX = touch.clientX; // Uppdatera för auto-scroll-loopen
+
+    // Flytta klonen med fingret (GPU-accelererat via translate3d)
+    touchClone.style.transform = `translate3d(${touch.clientX - touchClone.offsetWidth / 2}px, ${touch.clientY - touchClone.offsetHeight / 2}px, 0)`;
+
+    // Hitta kolumnen under fingret (klonen ignoreras tack vare pointer-events: none)
     const elemBelow = document.elementFromPoint(touch.clientX, touch.clientY);
-    const column = elemBelow ? elemBelow.closest('.column') : null;
-    
-    // Uppdatera drag-over-klass bara vid kolumnbyte (sparar prestanda)
+    const column    = elemBelow ? elemBelow.closest('.column') : null;
+
+    // Uppdatera drag-over-markering bara när kolumnen faktiskt ändras (prestanda)
     if (column !== lastHoveredColumn) {
         if (lastHoveredColumn) lastHoveredColumn.classList.remove('drag-over');
         if (column) column.classList.add('drag-over');
         lastHoveredColumn = column;
     }
-    
-    // --- Beräkna auto-scroll-hastighet ---
-    // Zon: 60px från varje skärmkant.
-    // Hastigheten ökar linjärt ju närmare kanten fingret är,
-    // vilket ger en naturlig känsla. Max ~5px/frame ≈ 300px/sek.
-    // Ändra EDGE_ZONE för bredare/smalare aktiveringszon.
-    // Ändra MAX_SPEED för snabbare/långsammare auto-scroll.
-    const EDGE_ZONE = 60;  // px från kanten (ändra för bredare zon)
-    const MAX_SPEED = 5;   // px per frame, max hastighet (ändra för snabbare/långsammare)
-    
-    if (touch.clientX < EDGE_ZONE) {
-        // Vänsterkant: negativ hastighet (scrolla åt vänster)
-        scrollSpeed = -MAX_SPEED * (1 - touch.clientX / EDGE_ZONE);
-    } else if (touch.clientX > window.innerWidth - EDGE_ZONE) {
-        // Högerkant: positiv hastighet (scrolla åt höger)
-        scrollSpeed = MAX_SPEED * (1 - (window.innerWidth - touch.clientX) / EDGE_ZONE);
-    } else {
-        // Mitt på skärmen: ingen auto-scroll
-        scrollSpeed = 0;
-    }
 };
 
 const handleTouchEnd = async (e) => {
     if (!touchClone) return;
-    const touch = e.changedTouches[0];
-    
+
+    stopAutoScroll(); // Stoppa auto-scroll-loopen
+
+    const touch     = e.changedTouches[0];
     const elemBelow = document.elementFromPoint(touch.clientX, touch.clientY);
-    const column = elemBelow ? elemBelow.closest('.column') : null;
-    
-    // Stoppa auto-scroll-loopen
-    if (scrollRAF) {
-        cancelAnimationFrame(scrollRAF);
-        scrollRAF = null;
-    }
-    scrollSpeed = 0;
+    const column    = elemBelow ? elemBelow.closest('.column') : null;
 
     document.body.style.overflow = '';
     touchClone.remove();
     touchClone = null;
-    
-    // --- Återaktivera scroll-snap ---
-    // Sätter tillbaka scroll-snap så att kolumnerna snäpper
-    // till rätt position med en mjuk CSS-transition (scroll-behavior: smooth).
+
+    // Återaktivera scroll-snap → kolumnen snäpper mjukt till rätt läge
     boardEl.style.scrollSnapType = 'x mandatory';
 
     if (lastHoveredColumn) lastHoveredColumn.classList.remove('drag-over');
     lastHoveredColumn = null;
-    
+
     if (column && draggedTaskId) {
         const targetStatus = column.dataset.status;
-        
-        // Undvik omrendering om kortet inte bytte kolumn
+        // Rendera bara om om kortet faktiskt bytte kolumn
         if (targetStatus !== draggedTaskOriginalStatus) {
             await updateTaskStatus(draggedTaskId, targetStatus);
             renderBoard();
         } else {
-            document.querySelectorAll('.task-card').forEach(card => card.classList.remove('dragging'));
+            document.querySelectorAll('.task-card').forEach(c => c.classList.remove('dragging'));
         }
     } else {
-        document.querySelectorAll('.task-card').forEach(card => card.classList.remove('dragging'));
+        document.querySelectorAll('.task-card').forEach(c => c.classList.remove('dragging'));
     }
-    draggedTaskId = null;
+
+    draggedTaskId             = null;
     draggedTaskOriginalStatus = null;
 };
 
